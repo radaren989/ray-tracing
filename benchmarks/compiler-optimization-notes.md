@@ -11,6 +11,75 @@ document. Future renderer, scene, build-system, or optimization changes should
 use a new version identifier and add a separate benchmark entry rather than
 overwriting these results.
 
+## CPU profiling snapshot
+
+### Profiling configuration
+
+- Project version: `v0.1.0`
+- Tool: Linux `perf`
+- Command:
+
+  ```bash
+  perf record -g ./build/benchmark 320 10 20 3
+  ```
+
+- Profile data: `perf.data`
+- Samples: approximately 90,000 processed samples
+- Lost samples: 4
+- Event: `cpu/cycles/Pu`
+
+The profile was collected from the single-threaded renderer. The small number
+of lost samples should not change the overall hotspot ordering, but future
+measurements should use a debug-symbol build with frame pointers enabled:
+
+```bash
+make clean
+make benchmark-build \
+  CXXFLAGS="-std=c++17 -Wall -Wextra -Wpedantic -O2 -g -fno-omit-frame-pointer"
+
+perf record -e cycles:u -F 99 --call-graph fp \
+  ./build/benchmark 320 10 20 1
+```
+
+### Observed hotspots
+
+The profile shows that almost all execution time is spent in the rendering
+path:
+
+| Function or area | Approximate inclusive share |
+|---|---:|
+| `camera::render` | 99.98% |
+| `camera::ray_color` | 99.54% |
+| Recursive `ray_color` calls | 61.75% |
+| `hittable_list::hit` | 37.19% |
+| `sphere::hit` | 33.66% |
+| `vec3::length_squared` | 2.0-3.5% |
+| `dot` | 2.1-2.4% |
+| `vec3` subtraction | 2.0-2.4% |
+
+These are inclusive call-tree values; nested values must not be added
+together. For example, `sphere::hit` is included within
+`hittable_list::hit`.
+
+### Profiling conclusion
+
+The current dominant cost is not matrix arithmetic. It is recursive ray
+tracing combined with linear traversal of every object in
+`hittable_list::hit`. The next high-value single-thread optimization should be
+an acceleration structure, most likely a BVH:
+
+```text
+linear hittable traversal
+-> BVH
+-> random number generation
+-> ray/sphere intersection math
+-> vec3/SIMD experiments
+-> parallel rendering
+```
+
+The profiling snapshot is a `v0.1.0` baseline and should be repeated after
+each major optimization.
+
 ## Workload
 
 | Parameter | Value |

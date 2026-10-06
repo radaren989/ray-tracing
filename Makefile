@@ -12,7 +12,7 @@ BENCHMARK_OBJECTS := $(patsubst %.cpp,build/%.o,$(BENCHMARK_SOURCES))
 DEPENDENCIES := $(APP_OBJECTS:.o=.d) $(BENCHMARK_OBJECTS:.o=.d)
 OUTPUT := output/image.ppm
 
-.PHONY: all render run benchmark clean
+.PHONY: all render run benchmark benchmark-build clean
 
 all: $(TARGET)
 
@@ -38,6 +38,8 @@ run: render
 
 benchmark: $(BENCHMARK_TARGET)
 	./$(BENCHMARK_TARGET) $(BENCHMARK_ARGS)
+
+benchmark-build: $(BENCHMARK_TARGET)
 
 clean:
 	rm -rf build output
