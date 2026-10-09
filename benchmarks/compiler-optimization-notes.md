@@ -80,6 +80,26 @@ linear hittable traversal
 The profiling snapshot is a `v0.1.0` baseline and should be repeated after
 each major optimization.
 
+## BVH profiling snapshot
+
+The post-BVH profile was collected with `-O2 -g -fno-omit-frame-pointer`:
+
+```bash
+perf record -e cycles:u -F 99 --call-graph fp \
+  ./build/benchmark 320 10 20 1
+```
+
+The dominant sampled function is now `aabb::hit`, at approximately 63% of
+samples. Its callers are recursive `bvh_node::hit` calls, confirming that
+the renderer is spending most of its traversal time testing bounding boxes
+instead of testing every sphere. This is the expected cost shift after the
+linear traversal bottleneck was removed.
+
+The next optimization target should be BVH traversal itself: test the child
+whose bounding box is entered first, then use the resulting hit distance to
+prune the farther child. Only after that should lower-level AABB arithmetic
+or SIMD changes be evaluated.
+
 ## Workload
 
 | Parameter | Value |
@@ -100,6 +120,33 @@ Each row reports one render iteration. Higher `rays_per_second` and lower
 | `-O2 -DNDEBUG` | 8.00035 | 7.69635 | 7.75518 | 7.8173 | 73,703.5 |
 | `-O3 -march=native -DNDEBUG` | 8.28309 | 8.11163 | 8.13816 | 8.1776 | 70,442.2 |
 | `-O3 -march=native -ffast-math -DNDEBUG` | 7.95976 | 7.66823 | 7.81686 | 7.8149 | 73,722.0 |
+
+## BVH comparison
+
+### Project version
+
+- Version: `v0.2.0`
+- Configuration: `-O2 -DNDEBUG`
+- Workload: 320 width, 10 samples per pixel, maximum depth 20, 3 iterations
+- Scene generation uses the default deterministic `std::rand()` sequence.
+- Render timing excludes scene construction and BVH construction.
+
+| Configuration | Iteration 1 (s) | Iteration 2 (s) | Iteration 3 (s) | Average (s) | Average rays/s |
+|---|---:|---:|---:|---:|---:|
+| Linear `hittable_list` | 7.71636 | 7.57228 | 7.62503 | 7.63789 | 75,418 |
+| BVH | 1.32321 | 1.29561 | 1.29704 | 1.30529 | 441,324 |
+
+BVH traversal is approximately **5.85x faster** than linear traversal for
+this workload, with the same rendered scene and compiler configuration.
+The comparison was run with:
+
+```bash
+make clean
+make benchmark-build \
+  CXXFLAGS="-std=c++17 -Wall -Wextra -Wpedantic -O2 -DNDEBUG"
+./build/benchmark 320 10 20 3
+RAY_TRACING_SCENE=linear ./build/benchmark 320 10 20 3
+```
 
 ## Relative comparison
 

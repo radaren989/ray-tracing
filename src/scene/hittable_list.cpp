@@ -26,3 +26,15 @@ bool hittable_list::hit(const ray &r, interval ray_t, hit_record &rec) const {
   }
   return hit_anything;
 }
+
+aabb hittable_list::bounding_box() const {
+  if (objects.empty()) {
+    return aabb();
+  }
+
+  aabb output = objects.front()->bounding_box();
+  for (size_t i = 1; i < objects.size(); ++i) {
+    output = surrounding_box(output, objects[i]->bounding_box());
+  }
+  return output;
+}

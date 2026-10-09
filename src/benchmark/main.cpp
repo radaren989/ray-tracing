@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <string>
 
 namespace {
 int parse_argument(const char *value, const char *name) {
@@ -31,12 +32,20 @@ int main(int argc, char **argv) {
 
   std::cout << "width,samples_per_pixel,max_depth,iteration,seconds,rays_per_"
                "second\n";
+  const bool use_linear_scene = std::getenv("RAY_TRACING_SCENE") != nullptr &&
+                                std::string(std::getenv("RAY_TRACING_SCENE")) ==
+                                    "linear";
   for (int iteration = 0; iteration < iterations; ++iteration) {
-    auto world = make_default_scene();
+    shared_ptr<hittable> world;
+    if (use_linear_scene) {
+      world = make_shared<hittable_list>(make_default_scene());
+    } else {
+      world = make_shared<bvh_node>(make_bvh_scene());
+    }
     auto cam = make_default_camera(image_width, samples_per_pixel, max_depth);
 
     const auto start = std::chrono::steady_clock::now();
-    cam.render(world, sink, false);
+    cam.render(*world, sink, false);
     const auto end = std::chrono::steady_clock::now();
 
     const double seconds = std::chrono::duration<double>(end - start).count();

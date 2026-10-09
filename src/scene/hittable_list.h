@@ -25,6 +25,7 @@ public:
   void clear();
   void add(shared_ptr<hittable> object);
   bool hit(const ray &r, interval ray_t, hit_record &rec) const override;
+  aabb bounding_box() const override;
 };
 
 #endif

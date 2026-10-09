@@ -56,3 +56,8 @@ camera make_default_camera(int image_width, int samples_per_pixel,
   cam.focus_dist = 10.0;
   return cam;
 }
+
+bvh_node make_bvh_scene() {
+  auto world = make_default_scene();
+  return bvh_node(world.objects);
+}
