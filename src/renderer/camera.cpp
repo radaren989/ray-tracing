@@ -3,24 +3,53 @@
 #include "../scene/material.h"
 
 #include <algorithm>
+#include <thread>
+
+void camera::render_rows(const hittable &world, std::vector<color> &pixels,
+                         std::atomic<int> &next_row) const {
+  while (true) {
+    const int row = next_row.fetch_add(1, std::memory_order_relaxed);
+    if (row >= image_height) {
+      return;
+    }
+
+    for (int i = 0; i < image_width; ++i) {
+      color pixel_color(0, 0, 0);
+      for (int sample = 0; sample < samples_per_pixel; ++sample) {
+        pixel_color += ray_color(get_ray(i, row), max_depth, world);
+      }
+      pixels[row * image_width + i] = pixel_samples_scale * pixel_color;
+    }
+  }
+}
 
 void camera::render(const hittable &world, std::ostream &output,
                     bool show_progress) {
   initialize();
-  output << "P3\n" << image_width << ' ' << image_height << "\n255\n";
-  for (int j = 0; j < image_height; ++j) {
-    if (show_progress) {
-      std::clog << "\rScanlines remaining: " << image_height - j << ' '
-                << std::flush;
-    }
-    for (int i = 0; i < image_width; ++i) {
-      color pixel_color(0, 0, 0);
-      for (int sample = 0; sample < samples_per_pixel; ++sample) {
-        pixel_color += ray_color(get_ray(i, j), max_depth, world);
-      }
-      write_color(output, pixel_samples_scale * pixel_color);
-    }
+  std::vector<color> pixels(image_width * image_height);
+
+  std::atomic<int> next_row{0};
+
+  const unsigned int thread_count = std::min(
+      static_cast<unsigned int>(image_height), std::max(1u, this->thread_count));
+
+  std::vector<std::thread> workers;
+  workers.reserve(thread_count);
+
+  for (unsigned int thread_id = 0; thread_id < thread_count; ++thread_id) {
+    workers.emplace_back(&camera::render_rows, this, std::cref(world),
+                         std::ref(pixels), std::ref(next_row));
   }
+
+  for (auto &worker : workers) {
+    worker.join();
+  }
+
+  output << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+  for (const auto &pixel : pixels) {
+    write_color(output, pixel);
+  }
+
   if (show_progress)
     std::clog << "\rDone.                 \n";
 }

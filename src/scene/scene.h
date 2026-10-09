@@ -8,6 +8,6 @@
 hittable_list make_default_scene();
 bvh_node make_bvh_scene();
 camera make_default_camera(int image_width, int samples_per_pixel,
-                           int max_depth);
+                           int max_depth, unsigned int thread_count = 1);
 
 #endif

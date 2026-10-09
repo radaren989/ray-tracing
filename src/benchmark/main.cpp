@@ -13,8 +13,10 @@ int parse_argument(const char *value, const char *name) {
     std::cerr << name << " must be greater than zero\n";
     std::exit(EXIT_FAILURE);
   }
+
   return parsed;
 }
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -23,6 +25,9 @@ int main(int argc, char **argv) {
       argc > 2 ? parse_argument(argv[2], "samples") : 10;
   const int max_depth = argc > 3 ? parse_argument(argv[3], "depth") : 20;
   const int iterations = argc > 4 ? parse_argument(argv[4], "iterations") : 3;
+  const unsigned int thread_count =
+      argc > 5 ? static_cast<unsigned int>(parse_argument(argv[5], "threads"))
+               : 1;
 
   std::ofstream sink("/dev/null");
   if (!sink) {
@@ -30,8 +35,8 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  std::cout << "width,samples_per_pixel,max_depth,iteration,seconds,rays_per_"
-               "second\n";
+  std::cout << "width,samples_per_pixel,max_depth,threads,iteration,seconds,"
+               "rays_per_second\n";
   const bool use_linear_scene = std::getenv("RAY_TRACING_SCENE") != nullptr &&
                                 std::string(std::getenv("RAY_TRACING_SCENE")) ==
                                     "linear";
@@ -42,7 +47,8 @@ int main(int argc, char **argv) {
     } else {
       world = make_shared<bvh_node>(make_bvh_scene());
     }
-    auto cam = make_default_camera(image_width, samples_per_pixel, max_depth);
+    auto cam = make_default_camera(image_width, samples_per_pixel, max_depth,
+                                   thread_count);
 
     const auto start = std::chrono::steady_clock::now();
     cam.render(*world, sink, false);
@@ -54,7 +60,7 @@ int main(int argc, char **argv) {
     const double rays =
         static_cast<double>(image_width) * image_height * samples_per_pixel;
     std::cout << image_width << ',' << samples_per_pixel << ',' << max_depth
-              << ',' << iteration + 1 << ',' << seconds << ',' << rays / seconds
-              << '\n';
+              << ',' << thread_count << ',' << iteration + 1 << ',' << seconds
+              << ',' << rays / seconds << '\n';
   }
 }

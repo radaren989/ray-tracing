@@ -70,6 +70,106 @@ bool bvh_node::hit(const ray &r, interval ray_t, hit_record &rec) const {
   return hit_left || hit_right;
 }
 
+std::array<bool, ray_packet_width>
+bvh_node::hit_packet(const ray_packet &rays, interval ray_t) const {
+  std::array<bool, ray_packet_width> active{};
+  active.fill(true);
+  return hit_packet_active(rays, ray_t, active);
+}
+
+std::array<bool, ray_packet_width>
+bvh_node::hit_packet_active(
+    const ray_packet &rays, interval ray_t,
+    const std::array<bool, ray_packet_width> &active) const {
+  std::array<bool, ray_packet_width> hits{};
+  const auto box_hits = box.hit_packet_avx2(rays, ray_t);
+  std::array<bool, ray_packet_width> node_hits{};
+  bool any_node_hit = false;
+  for (std::size_t lane = 0; lane < ray_packet_width; ++lane) {
+    node_hits[lane] = active[lane] && box_hits[lane];
+    any_node_hit = any_node_hit || node_hits[lane];
+  }
+  if (!any_node_hit) {
+    return hits;
+  }
+
+  const auto visit_child = [&](const shared_ptr<hittable> &child) {
+    if (!child) {
+      return;
+    }
+
+    const auto child_box_hits =
+        child->bounding_box().hit_packet_avx2(rays, ray_t);
+    std::array<bool, ray_packet_width> child_active{};
+    for (std::size_t lane = 0; lane < ray_packet_width; ++lane) {
+      child_active[lane] = node_hits[lane] && child_box_hits[lane];
+    }
+
+    bool any_child_active = false;
+    for (bool lane_active : child_active) {
+      any_child_active = any_child_active || lane_active;
+    }
+    if (!any_child_active) {
+      return;
+    }
+
+    const auto child_hits =
+        child->hit_packet_active(rays, ray_t, child_active);
+
+    for (std::size_t lane = 0; lane < ray_packet_width; ++lane) {
+      hits[lane] = hits[lane] || child_hits[lane];
+    }
+  };
+
+  visit_child(left);
+  visit_child(right);
+  return hits;
+}
+
+std::array<bool, ray_packet_width>
+bvh_node::hit_packet_records(
+    const ray_packet &rays, interval ray_t, packet_hit_records &records,
+    const std::array<bool, ray_packet_width> &active) const {
+  std::array<bool, ray_packet_width> hits{};
+  const auto box_hits = box.hit_packet_avx2(rays, ray_t);
+  std::array<bool, ray_packet_width> node_active{};
+  for (std::size_t lane = 0; lane < ray_packet_width; ++lane) {
+    node_active[lane] = active[lane] && box_hits[lane];
+  }
+
+  const auto visit_child = [&](const shared_ptr<hittable> &child) {
+    if (!child) {
+      return;
+    }
+
+    interval child_interval = ray_t;
+    std::array<bool, ray_packet_width> child_active{};
+    const auto child_box_hits =
+        child->bounding_box().hit_packet_avx2(rays, child_interval);
+    for (std::size_t lane = 0; lane < ray_packet_width; ++lane) {
+      child_active[lane] = node_active[lane] && child_box_hits[lane];
+      if (hits[lane]) {
+        child_interval.max = std::min(child_interval.max, records[lane].t);
+      }
+    }
+
+    packet_hit_records child_records{};
+    const auto child_hits = child->hit_packet_records(
+        rays, child_interval, child_records, child_active);
+    for (std::size_t lane = 0; lane < ray_packet_width; ++lane) {
+      if (child_hits[lane] && (!hits[lane] || child_records[lane].t <
+                                                records[lane].t)) {
+        hits[lane] = true;
+        records[lane] = child_records[lane];
+      }
+    }
+  };
+
+  visit_child(left);
+  visit_child(right);
+  return hits;
+}
+
 aabb bvh_node::bounding_box() const {
   return box;
 }

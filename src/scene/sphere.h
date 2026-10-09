@@ -18,6 +18,10 @@ class sphere : public hittable {
 public:
   sphere(const point3 &center, double radius, shared_ptr<material> mat);
   bool hit(const ray &r, interval ray_t, hit_record &rec) const override;
+  std::array<bool, ray_packet_width>
+  hit_packet_active(
+      const ray_packet &rays, interval ray_t,
+      const std::array<bool, ray_packet_width> &active) const override;
   aabb bounding_box() const override;
 
 private:

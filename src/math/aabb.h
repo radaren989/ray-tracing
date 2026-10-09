@@ -3,6 +3,9 @@
 
 #include "interval.h"
 #include "ray.h"
+#include "ray_packet.h"
+
+#include <array>
 
 class aabb {
 public:
@@ -23,6 +26,10 @@ public:
     }
   }
   bool hit(const ray &r, interval ray_t) const;
+  std::array<bool, ray_packet_width>
+  hit_packet(const ray_packet &rays, interval ray_t) const;
+  std::array<bool, ray_packet_width>
+  hit_packet_avx2(const ray_packet &rays, interval ray_t) const;
 };
 
 aabb surrounding_box(const aabb &first, const aabb &second);

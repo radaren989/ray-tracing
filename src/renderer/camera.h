@@ -3,7 +3,9 @@
 
 #include "../scene/hittable.h"
 
+#include <atomic>
 #include <iostream>
+#include <vector>
 
 class camera {
 public:
@@ -11,6 +13,7 @@ public:
   int image_width = 100;
   int samples_per_pixel = 10;
   int max_depth = 10;
+  unsigned int thread_count = 1;
   double vfov = 90;
   point3 lookfrom = point3(0, 0, 0);
   point3 lookat = point3(0, 0, -1);
@@ -31,6 +34,8 @@ private:
   vec3 defocus_disk_u, defocus_disk_v;
 
   void initialize();
+  void render_rows(const hittable &world, std::vector<color> &pixels,
+                   std::atomic<int> &next_row) const;
   ray get_ray(int i, int j) const;
   vec3 sample_square() const;
   point3 defocus_disk_sample() const;
