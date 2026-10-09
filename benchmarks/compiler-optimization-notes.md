@@ -100,6 +100,23 @@ whose bounding box is entered first, then use the resulting hit distance to
 prune the farther child. Only after that should lower-level AABB arithmetic
 or SIMD changes be evaluated.
 
+## AABB hot-path optimization
+
+The near-child-first experiment was measured but not retained. Although it
+passed correctness validation, it increased the clean-build average from
+1.30529 s to 1.50788 s because the extra child-ordering calculation was more
+expensive than the pruning benefit for this scene.
+
+The retained change simplified `aabb::hit()` by removing its axis loop and
+processing the three stored intervals directly. The ray-parallel containment
+check and interval narrowing semantics were preserved.
+
+With `-std=c++17 -Wall -Wextra -Wpedantic -O2 -DNDEBUG` and workload
+`320 10 20 3`, the measured render time improved from 1.23661 s to 1.14928 s.
+The three post-change iterations were 1.15445 s, 1.13971 s, and 1.15368 s,
+for approximately 501,200 rays/s on average. `make test` continued to pass
+for 221 deterministic rays.
+
 ## Workload
 
 | Parameter | Value |

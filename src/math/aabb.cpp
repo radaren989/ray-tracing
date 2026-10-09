@@ -12,28 +12,11 @@ aabb::aabb(const point3 &minimum, const point3 &maximum)
     : x(minimum.x(), maximum.x()), y(minimum.y(), maximum.y()),
       z(minimum.z(), maximum.z()) {}
 
-const interval &aabb::axis_interval(int axis) const {
-  switch (axis) {
-  case 0:
-    return x;
-  case 1:
-    return y;
-  default:
-    return z;
-  }
-}
-
 bool aabb::hit(const ray &r, interval ray_t) const {
-  for (int axis = 0; axis < 3; ++axis) {
-    const interval &axis_range = axis_interval(axis);
-    const double origin = r.origin()[axis];
-    const double direction = r.direction()[axis];
-
+  const auto hit_axis = [&ray_t](const interval &axis_range, double origin,
+                                 double direction) {
     if (std::fabs(direction) < 1e-12) {
-      if (!axis_range.contains(origin)) {
-        return false;
-      }
-      continue;
+      return axis_range.contains(origin);
     }
 
     auto t0 = (axis_range.min - origin) / direction;
@@ -44,12 +27,12 @@ bool aabb::hit(const ray &r, interval ray_t) const {
 
     ray_t.min = std::max(ray_t.min, t0);
     ray_t.max = std::min(ray_t.max, t1);
-    if (ray_t.max <= ray_t.min) {
-      return false;
-    }
-  }
+    return ray_t.max > ray_t.min;
+  };
 
-  return true;
+  return hit_axis(x, r.origin().x(), r.direction().x()) &&
+         hit_axis(y, r.origin().y(), r.direction().y()) &&
+         hit_axis(z, r.origin().z(), r.direction().z());
 }
 
 aabb surrounding_box(const aabb &first, const aabb &second) {

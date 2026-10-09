@@ -78,3 +78,48 @@ make test
 The current next optimization target is near-child-first traversal, followed
 by reducing the cost of AABB intersection if profiling still identifies it
 as the dominant bottleneck.
+
+## AABB hot-path optimization
+
+After the initial BVH implementation, `aabb::hit()` was identified as the
+main hot path. The first near-child-first traversal experiment was rejected:
+it preserved correctness but increased the clean-build average from 1.30529 s
+to 1.50788 s because calculating child ordering cost more than it saved.
+
+The accepted optimization keeps the existing child traversal order and
+simplifies `aabb::hit()`:
+
+- Removed the three-axis loop.
+- Processed the `x`, `y`, and `z` intervals directly.
+- Kept the parallel-ray containment check and interval narrowing unchanged.
+- Avoided `axis_interval()` dispatch in the rendering hot path.
+
+The implementation was measured with a clean build using:
+
+```bash
+make clean
+make benchmark-build \
+  CXXFLAGS="-std=c++17 -Wall -Wextra -Wpedantic -O2 -DNDEBUG"
+./build/benchmark 320 10 20 3
+```
+
+| Version | Iteration 1 (s) | Iteration 2 (s) | Iteration 3 (s) | Average (s) | Average rays/s |
+|---|---:|---:|---:|---:|---:|
+| Before direct-axis processing | 1.24759 | 1.22399 | 1.23825 | 1.23661 | 465,818 |
+| After direct-axis processing | 1.15445 | 1.13971 | 1.15368 | 1.14928 | 501,200 |
+
+The change reduced render time by **7.1%** relative to the previous BVH
+measurement and improved throughput by approximately **7.6%**. Relative to
+the original linear traversal measurement, the renderer is now approximately
+**6.65x faster**:
+
+```text
+7.63789 s -> 1.14928 s
+75,418 rays/s -> 501,200 rays/s
+```
+
+Correctness remained unchanged:
+
+```text
+BVH correctness passed for 221 rays
+```

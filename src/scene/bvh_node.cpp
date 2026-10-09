@@ -49,6 +49,7 @@ bvh_node::bvh_node(std::vector<shared_ptr<hittable>> &objects, size_t start,
     left = shared_ptr<hittable>(new bvh_node(objects, start, middle));
     right = shared_ptr<hittable>(new bvh_node(objects, middle, end));
   }
+
 }
 
 bool bvh_node::hit(const ray &r, interval ray_t, hit_record &rec) const {
